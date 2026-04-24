@@ -1,0 +1,12 @@
+# Local secrets – never commit
+.env
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
