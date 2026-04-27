@@ -44,12 +44,28 @@ export SIYUAN_TOKEN="your-token-here"
 
 Run the script from the skill root (or pass its absolute path). All commands print JSON; use `jq` for pretty output when available.
 
+## Codex Execution · Codex 执行约定
+
+When using this skill from Codex, run every `scripts/siyuan.sh` invocation with `functions.exec_command` and `sandbox_permissions: "require_escalated"` from the start.
+
+- Do **not** try the sandbox first. `siyuan.sh` talks to the SiYuan HTTP API, and sandbox-first execution can fail before the real request reaches the API.
+- Reuse the same escalation pattern for `search`, `search_blocks`, `read`, `docs`, `notebooks`, `tree`, `create`, and `sql`.
+- If the command still fails after escalation, inspect the JSON error from `siyuan.sh` before retrying.
+
+中文约定:
+
+- 在 Codex 中调用 `scripts/siyuan.sh` 时,默认就用 `sandbox_permissions: "require_escalated"`。
+- 不要先试沙箱。这个脚本依赖思源 HTTP API,沙箱优先会制造一次假失败。
+- `search`、`search_blocks`、`read`、`docs`、`notebooks`、`tree`、`create`、`sql` 都按同样方式执行。
+- 即使放行后仍失败,也先看脚本返回的 JSON 错误,再决定是否重试。
+
 ## Commands · 命令
 
 | Command | Purpose · 作用 | Notes · 备注 |
 |---------|----------------|--------------|
 | `siyuan.sh notebooks` | List notebooks · 列出笔记本 | Returns each notebook's `id` + `name` · 返回 `id` 和 `name` |
-| `siyuan.sh docs <notebook-id> [path]` | List document tree · 浏览文档树 | Path defaults to `/` · 默认根路径 `/` |
+| `siyuan.sh tree` | Get full document tree · 一键获取完整目录树 | Recursively expands all notebooks and subfolders · 递归展开所有笔记本和子文档 |
+| `siyuan.sh docs <notebook-id> [path]` | List single level · 浏览单层文档 | Path defaults to `/` · 默认根路径 `/` |
 | `siyuan.sh search <keyword> [limit]` | Search documents · 搜索文档 (`type='d'`) | Keyword + optional limit · 关键词 + 可选条数 |
 | `siyuan.sh search_blocks <keyword> [limit]` | Search all blocks · 搜索所有块 | Broader than `search` · 范围比 `search` 更广 |
 | `siyuan.sh read <block-id>` | Read Kramdown · 读取 Kramdown | Use `id` from search results · id 来自搜索结果 |
@@ -64,6 +80,8 @@ Run the script from the skill root (or pass its absolute path). All commands pri
 2. Present results; let the user pick an item.
 3. `siyuan.sh read <block-id>` — load full Kramdown for the chosen document.
 
+In Codex, request escalation for both commands immediately instead of probing in the sandbox first.
+
 - EN prompt: *"Find my notes about Kafka, then show me the top one."*
 - 中文 prompt:*"搜一下我笔记里关于 Kafka 的内容,读一下最相关的那篇。"*
 
@@ -72,6 +90,8 @@ Run the script from the skill root (or pass its absolute path). All commands pri
 1. `siyuan.sh search "topic"` — collect relevant document ids.
 2. For each selected result, `siyuan.sh read <id>`.
 3. Synthesize a concise report from the combined content, **in the user's language**.
+
+In Codex, run each `siyuan.sh` call with escalation from the first attempt.
 
 - EN prompt: *"Summarize action items from my meeting notes this week."*
 - 中文 prompt:*"帮我把这周的会议记录总结一下,挑出行动项。"*
@@ -92,14 +112,24 @@ Body…
 EOF
 ```
 
+In Codex, request escalation for `notebooks` and `create` before running them.
+
 - EN prompt: *"Save this spec to /projects/foo/spec in my Work notebook."*
 - 中文 prompt:*"把这段内容存到我 Work 笔记本的 `/projects/foo/spec` 下。"*
 
 ### 4. Browse structure · 浏览目录结构
 
+**One-step (recommended)**: `siyuan.sh tree` — returns the full nested document tree of all notebooks.
+
+**Step-by-step**:
 1. `siyuan.sh notebooks`
 2. `siyuan.sh docs <notebook-id> /`
 3. `siyuan.sh docs <notebook-id> /subfolder` to go deeper
+
+In Codex, request escalation for every browse step. When the user asks for the full tree, use `tree` command directly instead of walking level by level.
+
+- EN prompt: *"Show me my full SiYuan document tree."* → `siyuan.sh tree`
+- 中文 prompt:*"给我看思源的完整目录树。"* → `siyuan.sh tree`
 
 ## SQL examples · SQL 示例
 
@@ -129,6 +159,7 @@ SELECT box, COUNT(*) AS count FROM blocks WHERE type='d' GROUP BY box;
 4. **Paths**: Creation paths are absolute within the notebook, slash-separated, e.g. `/projects/foo/spec`. · `create` 的路径是笔记本内的绝对路径,`/` 分隔。
 5. **Formats**: `read` returns Kramdown; `create` accepts Markdown. · `read` 返回 Kramdown,`create` 接受 Markdown。
 6. **Safety · 安全**: Do not embed secrets in the skill or repo; use environment variables or `.env` only. Never echo the token back to the user. · 不要把 token 写进仓库,不要在回复里回显 token。
+7. **Codex execution · Codex 调用**: Treat every `siyuan.sh` call as an HTTP API operation and request escalation immediately instead of trying the sandbox first. · 把每次 `siyuan.sh` 调用都当成 HTTP API 访问,默认直接申请放行,不要先试沙箱。
 
 ## Examples · 对话示例
 
